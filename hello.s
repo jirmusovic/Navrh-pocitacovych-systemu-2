@@ -9,7 +9,7 @@
 login:          .asciiz "xjirmu00"  ; sem doplnte vas login
 key:            .asciiz "ji"        ; sifrovaci klic
 cipher:         .space  17          ; misto pro zapis sifrovaneho loginu
-plot:           .asciiz "az"
+stahp:          .asciiz "az"        ; ohraniceni pismen
 
 params_sys5:    .space  8           ; misto pro ulozeni adresy pocatku
                                     ; retezce pro vypis pomoci syscall 5
@@ -20,33 +20,63 @@ params_sys5:    .space  8           ; misto pro ulozeni adresy pocatku
 
                 
 main:
-                xor     r10, r10, r10
-                xor     r15, r15, r15
-
-                daddi   r15, r0, login
-                daddi   r17, r0, cipher
-        magic:
-                jal     is_number   ;overeni cisla + nacteni prvniho znaku loginu
-                bnez    r10, end_magic
+        key_check:
+                daddi   r17, r0, key    ;key v r17
+                lb      r28, 0(r17)
+                daddi   r10, r0, stahp
+                lb      r10, 0(r10)
+                sub     r28, r28, r10
+                daddi   r28, r28, 1
+                ;check
                 sb      r28, 0(r17)
+
+                lb      r28, 1(r17)
+                daddi   r10, r0, stahp
+                lb      r10, 0(r10)
+                sub     r28, r28, r10
+                daddi   r28, r28, 1
+                sb      r28, 1(r17)
+
+
+                xor     r10, r10, r10
+                xor     r15, r15, r15   ;cisteni registru
+
+                daddi   r15, r0, login  ;login v r15
+                daddi   r4, r0, cipher
+
+                
+        magic:
+                jal     is_number       ;overeni cisla + nacteni prvniho znaku loginu
+                bnez    r10, end_magic  ;pokud je overeny znak cislo, vypis zasifrovane slovo a ukonci program
+                daddi   r17, r0, key
+                lb      r17, 0(r17)     
+                lb      r10, 0(r15)
+                add     r28, r10, r17
+                jal     overflow_check
+                sb      r28, 0(r4)
                 
 
 
 
                 daddi   r15, r15, 1
-                daddi   r17, r17, 1
-                jal     is_number   ;overeni cisla + nacteni prvniho znaku loginu
-                bnez    r10, end_magic
-                sb      r28, 0(r17)
+                daddi   r4, r4, 1     ;inc r17 a r15 (posuneme se na dalsi byte)
+                jal     is_number       ;overeni cisla + nacteni noveho prvniho znaku loginu
+                bnez    r10, end_magic  ;opet koncime magii, pokud narazime na cislo
+                daddi   r17, r0, key
+                lb      r17, 1(r17)     
+                lb      r10, 0(r15)
+                sub     r28, r10, r17
+                jal     overflow_check
+                sb      r28, 0(r4)   
 
 
 
 
                 daddi   r15, r15, 1
-                daddi   r17, r17, 1
+                daddi   r4, r4, 1
                 b       magic
         end_magic:
-                daddi    r4, r0, cipher
+                daddi   r4, r0, cipher  ;do r4 nahrajeme vyslednou sifru
                 jal     print_string    ; vypis pomoci print_string - viz nize
 
 
@@ -56,13 +86,37 @@ main:
 is_number:
 
                 lb      r28, 0(r15)
-                daddi   r10, r0, plot   
+                daddi   r10, r0, stahp   
                 lb      r10, 0(r10)   
 
                 slt     r10, r28, r10
                 jr      r31
 
-               
+;;;;;;;NEPREPISOVAT r4 A r15 prosim
+overflow_check:
+                daddi      r10, r0, stahp
+                lb         r10, 0(r10)
+                ;;;;;;;;;;;  1  sif < a
+                ;;;;;;;;;;   0  sif >= a
+                slt        r10, r28, r10
+                beqz       r10, great
+                daddi      r28, r28, 26
+
+        great:  
+                daddi      r10, r0, stahp
+                lb         r10, 1(r10)
+                ;;;;;;;;;;;  1   z   < sif
+                ;;;;;;;;;;   0   z   >= sif
+                slt        r10, r10, r28
+                beqz       r10, continue
+                daddi      r28, r28, -26
+
+        continue:
+                jr      r31
+
+
+
+
 
 
 
